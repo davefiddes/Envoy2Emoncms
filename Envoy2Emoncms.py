@@ -115,17 +115,6 @@ while True:
  f1.write (the_page_sum)
  f1.close()
 
- # Build up timestamp collection 
- for x in range(len(data_inv)):
-   # Check if Inverter Device is in dictionary list
-   if data_inv[x]['serialNumber'] in TimeStampList:
-     # Time Stamp Already in list 
-     logging.debug(data_inv[x]['serialNumber'] + " - not add serialnumber to list")
-   else: 
-     # Time Stamp Not In List
-     TimeStampList[data_inv[x]['serialNumber']] = data_inv[x]['lastReportDate'] 
-     logging.debug(data_inv[x]['serialNumber'] + " -     add serialnumber to list")
-
  DataJson_inv.clear()
  DataJson_sum.clear()
 
@@ -142,16 +131,18 @@ while True:
 
    logging.debug("Serial          : " + data_inv[x]['serialNumber'])
    logging.debug("LastReportDate  : " + str(data_inv[x]['lastReportDate']))
-   logging.debug("TimeStampList   : " + str(TimeStampList[data_inv[x]['serialNumber']]))
+   if (data_inv[x]['serialNumber'] in TimeStampList):
+    logging.debug("TimeStampList   : " + str(TimeStampList[data_inv[x]['serialNumber']]))
    logging.debug("lastReportWatts : " + str(data_inv[x]['lastReportWatts']))
  
-   if      (data_inv[x]['lastReportDate'] > TimeStampList[data_inv[x]['serialNumber']])  and (data_inv[x]['lastReportWatts']>0):
+   if ((data_inv[x]['serialNumber'] not in TimeStampList) or (data_inv[x]['lastReportDate'] > TimeStampList[data_inv[x]['serialNumber']]))  and (data_inv[x]['lastReportWatts']>0):
     # String contains a newer report  
     logging.debug("Update, newer timestamp found")
     DataJson_inv[PanelID + '_LRW'] = data_inv[x]['lastReportWatts']
     DataJson_inv[PanelID + '_MRW'] = data_inv[x]['maxReportWatts']
     DataJson_inv[PanelID + '_IVO'] = 1 
-    logging.debug("Update time inverter : " + str(data_inv[x]['lastReportDate']) + "  LastKnowUpdate : " + str(TimeStampList[data_inv[x]['serialNumber']]))
+    if (data_inv[x]['serialNumber'] in TimeStampList):
+      logging.debug("Update time inverter : " + str(data_inv[x]['lastReportDate']) + "  LastKnowUpdate : " + str(TimeStampList[data_inv[x]['serialNumber']]))
     TimeStampList[data_inv[x]['serialNumber']]     = data_inv[x]['lastReportDate']
    elif    (data_inv[x]['lastReportDate'] == TimeStampList[data_inv[x]['serialNumber']]) and data_sum['wattsNow'] == 0:
     # Since more than 300 sec and no new data recieved, this means inverts are off 
