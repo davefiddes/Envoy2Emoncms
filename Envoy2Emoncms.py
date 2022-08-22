@@ -7,12 +7,12 @@ version = "v1.00"
 
 
 # If you experience errors while executing this script, make sure you installed python and the required modules/libraries
-import ConfigParser
+import configparser
 import datetime
 import logging
 import json
-import urllib2
-import urllib
+import urllib.request, urllib.error, urllib.parse
+import urllib.request, urllib.parse, urllib.error
 import time
 
 TimeStampList = { }
@@ -32,7 +32,7 @@ logging.basicConfig(filename=LogFile,format='%(asctime)s %(message)s',level=logg
 # Procedures 
 ###############################################################################################################
 
-Config = ConfigParser.ConfigParser()
+Config = configparser.ConfigParser()
 Config.read("/etc/Envoy2Emoncms/Envoy2Emoncms.cfg")
 
 def ConfigSectionMap(section):
@@ -49,7 +49,7 @@ def ConfigSectionMap(section):
             dict1[option] = None
     return dict1
 
-print Config.sections()
+print(Config.sections())
 
 emon_privateKey = ConfigSectionMap("emoncms")['privatekey'] 
 emon_node_panel = ConfigSectionMap("emoncms")['node_panel'] 
@@ -83,10 +83,10 @@ url_envoy_inv  = envoy_protocol + envoy_host + envoy_url_inv
 url_envoy_sum  = envoy_protocol + envoy_host + envoy_url_sum 
 
 # Set passwordlist for Envoy URL 
-authhandler  = urllib2.HTTPDigestAuthHandler()
+authhandler  = urllib.request.HTTPDigestAuthHandler()
 authhandler.add_password(envoy_realm, envoy_protocol + envoy_host, envoy_username, envoy_password)
-opener       = urllib2.build_opener(authhandler)
-urllib2.install_opener(opener)
+opener       = urllib.request.build_opener(authhandler)
+urllib.request.install_opener(opener)
 
 # Do forever ....
 
@@ -98,19 +98,19 @@ while True:
  f3.close()
 
  # Fetch page with ENVOY inverter data
- page_content_inv = urllib2.urlopen(url_envoy_inv)
+ page_content_inv = urllib.request.urlopen(url_envoy_inv)
  the_page_inv     = page_content_inv.read()
  logging.debug(the_page_inv)
  data_inv = json.loads(the_page_inv)
 
  # Fetch page with ENVOY general data
- page_content_sum = urllib2.urlopen(url_envoy_sum)
+ page_content_sum = urllib.request.urlopen(url_envoy_sum)
  the_page_sum     = page_content_sum.read()
  logging.debug(the_page_sum)
  data_sum = json.loads(the_page_sum)
 
  # Write raw output from envoy to file 
- f1=open(LogFileLastMessage, "w")
+ f1=open(LogFileLastMessage, "wb")
  f1.write (the_page_inv)
  f1.write (the_page_sum)
  f1.close()
@@ -118,7 +118,7 @@ while True:
  # Build up timestamp collection 
  for x in range(len(data_inv)):
    # Check if Inverter Device is in dictionary list
-   if TimeStampList.has_key(data_inv[x]['serialNumber']):
+   if data_inv[x]['serialNumber'] in TimeStampList:
      # Time Stamp Already in list 
      logging.debug(data_inv[x]['serialNumber'] + " - not add serialnumber to list")
    else: 
@@ -131,7 +131,7 @@ while True:
 
  # Determine panel and array according to translation list, based on naming 
  for x in range(len(data_inv)):
-   if TranslationList.has_key(data_inv[x]['serialNumber']):
+   if data_inv[x]['serialNumber'] in TranslationList:
      # Serial in list use alias 
      PanelID = TranslationList[data_inv[x]['serialNumber']]
      logging.debug("Inverter     found in list : " + data_inv[x]['serialNumber'] + " -> " + TranslationList[data_inv[x]['serialNumber']])
@@ -167,7 +167,7 @@ while True:
   logging.debug(json.dumps(DataJson_inv, separators=(',', ':')))
   url_inv  = emon_protocol + emon_host + emon_url + "&node=" + emon_node_panel + "&apikey=" + emon_privateKey + "&json=" + str( json.dumps(DataJson_inv, separators=(',', ':')))
   logging.debug(url_inv)
-  HTTPresult_inv = urllib2.urlopen(url_inv)
+  HTTPresult_inv = urllib.request.urlopen(url_inv)
   logging.debug("Response code : " + str(HTTPresult_inv.getcode()))
 
  DataJson_sum['wattHoursToday']    = data_sum['wattHoursToday']
@@ -177,7 +177,7 @@ while True:
  logging.debug(json.dumps(DataJson_sum, separators=(',', ':')))
  url_sum  = emon_protocol + emon_host + emon_url + "&node=" + emon_node_sum   + "&apikey=" + emon_privateKey + "&json=" + str( json.dumps(DataJson_sum, separators=(',', ':')))
  logging.debug(url_sum)
- HTTPresult_sum = urllib2.urlopen(url_sum)
+ HTTPresult_sum = urllib.request.urlopen(url_sum)
  logging.debug("Response code : " +  str(HTTPresult_sum.getcode()))
 
  time.sleep(15) 
