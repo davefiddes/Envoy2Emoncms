@@ -3,12 +3,14 @@
 # coded by:
 # author : Edwin Bontenbal
 # Email : Edwin.Bontenbal@Gmail.COM
-import requests
 import time
 import json
 import logging
+import logging.config
 import configparser
-version = "v1.00"
+import requests
+
+Version = "v1.00"
 
 
 # If you experience errors while executing this script, make sure you installed
@@ -20,13 +22,8 @@ DataJson_sum = {}
 
 TranslationList = {}
 
-LogFile = "/var/log/Envoy2Emoncms.log"
-LogFileLastMessage = "/tmp/Envoy2Emoncms.log"
-WatchdogFile = "/tmp/Envoy2Emoncms_Watchdog"
-
-# Set logging params
-logging.basicConfig(
-    filename=LogFile, format='%(asctime)s %(message)s', level=logging.DEBUG)
+# Allow programming logging to be configured externally
+logging.config.fileConfig("/etc/Envoy2Emoncms/logging.conf")
 
 ###############################################################################
 # Procedures
@@ -93,15 +90,11 @@ envoy_session.auth = requests.auth.HTTPDigestAuth(
 
 emoncms_session = requests.Session()
 
+logging.info("Envoy2Emoncms %s starting", Version)
+
 # Do forever ....
 
 while True:
-    # Write time to watchdog file, as a sign of life
-    f3 = open(WatchdogFile, "w", encoding="utf-8")
-    timestamp = int(time.time())
-    f3.write(str(timestamp))
-    f3.close()
-
     # Fetch page with ENVOY inverter data
     page_content_inv = envoy_session.get(url_envoy_inv)
     the_page_inv = page_content_inv.text
@@ -113,12 +106,6 @@ while True:
     the_page_sum = page_content_sum.text
     logging.debug(the_page_sum)
     data_sum = page_content_sum.json()
-
-    # Write raw output from envoy to file
-    f1 = open(LogFileLastMessage, "w", encoding="utf-8")
-    f1.write(the_page_inv)
-    f1.write(the_page_sum)
-    f1.close()
 
     DataJson_inv.clear()
     DataJson_sum.clear()
