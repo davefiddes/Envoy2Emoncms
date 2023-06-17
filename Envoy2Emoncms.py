@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 # This utility sends envoy (enphase) data to emoncms
 #
 # coded by:
