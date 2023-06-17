@@ -3,18 +3,16 @@
 # coded by:
 # author : Edwin Bontenbal
 # Email : Edwin.Bontenbal@Gmail.COM
-import urllib.parse
-import urllib.error
-import urllib.request
+import requests
 import time
 import json
 import logging
-import datetime
 import configparser
 version = "v1.00"
 
 
-# If you experience errors while executing this script, make sure you installed python and the required modules/libraries
+# If you experience errors while executing this script, make sure you installed
+# python and the required modules/libraries
 
 TimeStampList = {}
 DataJson_inv = {}
@@ -30,9 +28,9 @@ WatchdogFile = "/tmp/Envoy2Emoncms_Watchdog"
 logging.basicConfig(
     filename=LogFile, format='%(asctime)s %(message)s', level=logging.DEBUG)
 
-###############################################################################################################
+###############################################################################
 # Procedures
-###############################################################################################################
+###############################################################################
 
 Config = configparser.ConfigParser()
 Config.read("/etc/Envoy2Emoncms/Envoy2Emoncms.cfg")
@@ -49,7 +47,7 @@ def ConfigSectionMap(section):
             if dict1[option] == -1:
                 print("skip: %s" % option)
         except:
-            print("exception on %s!" % option)
+            print(f"exception on {option}!")
             dict1[option] = None
     return dict1
 
@@ -78,46 +76,46 @@ for option in options:
         logging.debug("Reading config file : translationlist," +
                       option + " = " + TranslationList[option])
     except:
-        print("exception on %s!" % option)
+        print(f"exception on {option}!")
 
-###############################################################################################################
+###############################################################################
 # Main program
-###############################################################################################################
+###############################################################################
 
 # Construct urls
 url_envoy_inv = envoy_protocol + envoy_host + envoy_url_inv
 url_envoy_sum = envoy_protocol + envoy_host + envoy_url_sum
+emoncms_post_url = emon_protocol + emon_host + emon_url
 
-# Set passwordlist for Envoy URL
-authhandler = urllib.request.HTTPDigestAuthHandler()
-authhandler.add_password(envoy_realm, envoy_protocol +
-                         envoy_host, envoy_username, envoy_password)
-opener = urllib.request.build_opener(authhandler)
-urllib.request.install_opener(opener)
+envoy_session = requests.Session()
+envoy_session.auth = requests.auth.HTTPDigestAuth(
+    envoy_username, envoy_password)
+
+emoncms_session = requests.Session()
 
 # Do forever ....
 
 while True:
     # Write time to watchdog file, as a sign of life
-    f3 = open(WatchdogFile, "w")
+    f3 = open(WatchdogFile, "w", encoding="utf-8")
     timestamp = int(time.time())
     f3.write(str(timestamp))
     f3.close()
 
     # Fetch page with ENVOY inverter data
-    page_content_inv = urllib.request.urlopen(url_envoy_inv)
-    the_page_inv = page_content_inv.read()
+    page_content_inv = envoy_session.get(url_envoy_inv)
+    the_page_inv = page_content_inv.text
     logging.debug(the_page_inv)
-    data_inv = json.loads(the_page_inv)
+    data_inv = page_content_inv.json()
 
     # Fetch page with ENVOY general data
-    page_content_sum = urllib.request.urlopen(url_envoy_sum)
-    the_page_sum = page_content_sum.read()
+    page_content_sum = envoy_session.get(url_envoy_sum)
+    the_page_sum = page_content_sum.text
     logging.debug(the_page_sum)
-    data_sum = json.loads(the_page_sum)
+    data_sum = page_content_sum.json()
 
     # Write raw output from envoy to file
-    f1 = open(LogFileLastMessage, "wb")
+    f1 = open(LogFileLastMessage, "w", encoding="utf-8")
     f1.write(the_page_inv)
     f1.write(the_page_sum)
     f1.close()
@@ -126,69 +124,69 @@ while True:
     DataJson_sum.clear()
 
     # Determine panel and array according to translation list, based on naming
-    for x in range(len(data_inv)):
-        if data_inv[x]['serialNumber'] in TranslationList:
+    for inverter in data_inv:
+        serial_number = inverter['serialNumber']
+        last_report_time = inverter['lastReportDate']
+        last_report_watts = inverter['lastReportWatts']
+        max_report_watts = inverter['maxReportWatts']
+
+        if serial_number in TranslationList:
             # Serial in list use alias
-            PanelID = TranslationList[data_inv[x]['serialNumber']]
-            logging.debug("Inverter     found in list : " +
-                          data_inv[x]['serialNumber'] + " -> " + TranslationList[data_inv[x]['serialNumber']])
+            PanelID = TranslationList[serial_number]
+            logging.debug("Inverter found in list : %s -> %s",
+                          serial_number, PanelID)
         else:
-            # Serial not In List use serial
-            PanelID = data_inv[x]['serialNumber']
-            logging.debug("Inverter not found in list : " +
-                          data_inv[x]['serialNumber'])
+            # Serial not in list use serial
+            PanelID = serial_number
+            logging.debug("Inverter not found in list : %s", serial_number)
 
-        logging.debug("Serial          : " + data_inv[x]['serialNumber'])
-        logging.debug("LastReportDate  : " +
-                      str(data_inv[x]['lastReportDate']))
-        if (data_inv[x]['serialNumber'] in TimeStampList):
-            logging.debug("TimeStampList   : " +
-                          str(TimeStampList[data_inv[x]['serialNumber']]))
-        logging.debug("lastReportWatts : " +
-                      str(data_inv[x]['lastReportWatts']))
+        logging.debug("Serial          : %s", serial_number)
+        logging.debug("LastReportDate  : %s", last_report_time)
+        logging.debug("lastReportWatts : %s", last_report_watts)
+        if serial_number not in TimeStampList:
+            # Ensure we always have an entry in the TimeStampList
+            TimeStampList[serial_number] = 0
+            logging.debug("Initial report for : %s", serial_number)
 
-        if ((data_inv[x]['serialNumber'] not in TimeStampList) or (data_inv[x]['lastReportDate'] > TimeStampList[data_inv[x]['serialNumber']])) and (data_inv[x]['lastReportWatts'] > 0):
-            # String contains a newer report
+        if last_report_time > TimeStampList[serial_number]:
             logging.debug("Update, newer timestamp found")
-            DataJson_inv[PanelID + '_LRW'] = data_inv[x]['lastReportWatts']
-            DataJson_inv[PanelID + '_MRW'] = data_inv[x]['maxReportWatts']
-            DataJson_inv[PanelID + '_IVO'] = 1
-            if (data_inv[x]['serialNumber'] in TimeStampList):
-                logging.debug("Update time inverter : " + str(
-                    data_inv[x]['lastReportDate']) + "  LastKnowUpdate : " + str(TimeStampList[data_inv[x]['serialNumber']]))
-            TimeStampList[data_inv[x]['serialNumber']
-                          ] = data_inv[x]['lastReportDate']
-        elif (data_inv[x]['lastReportDate'] == TimeStampList[data_inv[x]['serialNumber']]) and data_sum['wattsNow'] == 0:
-            # Since more than 300 sec and no new data recieved, this means inverts are off
             logging.debug(
-                "stop, set everything to zero, no new data comming in")
-            DataJson_inv[PanelID + '_LRW'] = 0
-            DataJson_inv[PanelID + '_MRW'] = data_inv[x]['maxReportWatts']
-            DataJson_inv[PanelID + '_IVO'] = 0
+                "Update timestamp : %s Previous timestamp : %s",
+                last_report_time,
+                TimeStampList[serial_number])
 
-    if DataJson_inv == {}:
+            DataJson_inv[PanelID + '_LRW'] = last_report_watts
+            DataJson_inv[PanelID + '_MRW'] = max_report_watts
+            DataJson_inv[PanelID + '_IVO'] = 1
+            TimeStampList[serial_number] = last_report_time
+
+    if DataJson_inv:
+        logging.debug("New inverter data found, so push to emoncms")
+        inverter_payload = {
+            "node": emon_node_panel,
+            "apikey": emon_privateKey,
+            "fulljson": json.dumps(DataJson_inv, separators=(',', ':'))
+        }
+        logging.debug(inverter_payload)
+        HTTPresult_inv = emoncms_session.post(
+            emoncms_post_url, data=inverter_payload)
+        logging.debug("Response code : %s", HTTPresult_inv.status_code)
+    else:
         logging.debug(
             "No new inverter data found, so nothing to push to emoncms")
-    else:
-        logging.debug("   new inverter data found, so push to emoncms")
-        logging.debug(json.dumps(DataJson_inv, separators=(',', ':')))
-        url_inv = emon_protocol + emon_host + emon_url + "&node=" + emon_node_panel + "&apikey=" + \
-            emon_privateKey + "&json=" + \
-            str(json.dumps(DataJson_inv, separators=(',', ':')))
-        logging.debug(url_inv)
-        HTTPresult_inv = urllib.request.urlopen(url_inv)
-        logging.debug("Response code : " + str(HTTPresult_inv.getcode()))
 
     DataJson_sum['wattHoursToday'] = data_sum['wattHoursToday']
     DataJson_sum['wattHoursLifetime'] = data_sum['wattHoursLifetime']
     DataJson_sum['wattsNow'] = data_sum['wattsNow']
 
-    logging.debug(json.dumps(DataJson_sum, separators=(',', ':')))
-    url_sum = emon_protocol + emon_host + emon_url + "&node=" + emon_node_sum + "&apikey=" + \
-        emon_privateKey + "&json=" + \
-        str(json.dumps(DataJson_sum, separators=(',', ':')))
-    logging.debug(url_sum)
-    HTTPresult_sum = urllib.request.urlopen(url_sum)
-    logging.debug("Response code : " + str(HTTPresult_sum.getcode()))
+    summary_payload = {
+        "node": emon_node_sum,
+        "apikey": emon_privateKey,
+        "fulljson": json.dumps(DataJson_sum, separators=(',', ':'))
+    }
+    logging.debug(summary_payload)
+    HTTPresult_sum = emoncms_session.post(
+        emoncms_post_url, data=summary_payload)
+    logging.debug("Response code : %s", HTTPresult_sum.status_code)
 
     time.sleep(15)
